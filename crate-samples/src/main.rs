@@ -1,6 +1,9 @@
 use rayon::prelude::*;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::TcpListener};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpListener,
+};
 use tokio_util::task::TaskTracker;
 
 pub fn blur(src: &[f32], w: usize, h: usize) -> Vec<f32> {
@@ -33,10 +36,16 @@ async fn main() -> std::io::Result<()> {
     let img = vec![1f32; 64 * 64];
     let out = blur(&img, 64, 64);
     println!("blur ok {}", out[100]);
-    let pool = rayon::ThreadPoolBuilder::new().num_threads(2).build().unwrap();
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(2)
+        .build()
+        .unwrap();
     let s: u64 = pool.install(|| (0..1000u64).into_par_iter().sum());
-    let _p = Padded(AtomicU64::new(s));
+    let padded = Padded(AtomicU64::new(s));
+    println!("padded sum={}", padded.0.load(Relaxed));
     let f = std::fs::File::open("/etc/hostname")?;
+    // SAFETY: the file descriptor remains open, and the mapping is not
+    // concurrently truncated or modified while its bytes are being read.
     let map = unsafe { memmap2::Mmap::map(&f)? };
     println!("mmap bytes {}", map.len());
 

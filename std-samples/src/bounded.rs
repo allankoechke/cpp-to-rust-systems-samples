@@ -10,7 +10,13 @@ pub struct Bounded<T> {
 
 impl<T> Bounded<T> {
     pub fn new(cap: usize) -> Self {
-        Bounded { q: Mutex::new(VecDeque::with_capacity(cap)), cap, not_full: Condvar::new(), not_empty: Condvar::new() }
+        assert!(cap > 0, "a bounded channel requires a positive capacity");
+        Bounded {
+            q: Mutex::new(VecDeque::with_capacity(cap)),
+            cap,
+            not_full: Condvar::new(),
+            not_empty: Condvar::new(),
+        }
     }
 
     /// Blocks while the queue is full: this is backpressure.
@@ -40,11 +46,32 @@ mod tests {
     use super::*;
     use std::sync::Arc;
     #[test]
+    fn zero_capacity_is_rejected() {
+        let result = std::panic::catch_unwind(|| Bounded::<u8>::new(0));
+        assert!(result.is_err());
+    }
+    #[test]
     fn many_producers_many_consumers() {
         let ch = Arc::new(Bounded::new(8));
-        let producers: Vec<_> = (0..4).map(|p| { let ch = ch.clone(); std::thread::spawn(move || for i in 0..1000 { ch.send(p * 1000 + i) }) }).collect();
-        let consumers: Vec<_> = (0..4).map(|_| { let ch = ch.clone(); std::thread::spawn(move || (0..1000).map(|_| ch.recv() as u64).sum::<u64>()) }).collect();
-        for p in producers { p.join().unwrap(); }
+        let producers: Vec<_> = (0..4)
+            .map(|p| {
+                let ch = ch.clone();
+                std::thread::spawn(move || {
+                    for i in 0..1000 {
+                        ch.send(p * 1000 + i)
+                    }
+                })
+            })
+            .collect();
+        let consumers: Vec<_> = (0..4)
+            .map(|_| {
+                let ch = ch.clone();
+                std::thread::spawn(move || (0..1000).map(|_| ch.recv() as u64).sum::<u64>())
+            })
+            .collect();
+        for p in producers {
+            p.join().unwrap();
+        }
         let total: u64 = consumers.into_iter().map(|c| c.join().unwrap()).sum();
         assert_eq!(total, (0..4000u64).sum());
     }

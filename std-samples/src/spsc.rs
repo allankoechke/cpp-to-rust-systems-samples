@@ -1,6 +1,9 @@
 use std::cell::UnsafeCell;
 use std::mem::MaybeUninit;
-use std::sync::atomic::{AtomicUsize, Ordering::{Acquire, Relaxed, Release}};
+use std::sync::atomic::{
+    AtomicUsize,
+    Ordering::{Acquire, Relaxed, Release},
+};
 use std::sync::Arc;
 
 struct Shared<T> {
@@ -18,8 +21,14 @@ pub struct Consumer<T>(Arc<Shared<T>>);
 
 pub fn channel<T>(cap: usize) -> (Producer<T>, Consumer<T>) {
     assert!(cap > 0);
-    let buf = (0..cap).map(|_| UnsafeCell::new(MaybeUninit::uninit())).collect();
-    let s = Arc::new(Shared { buf, head: AtomicUsize::new(0), tail: AtomicUsize::new(0) });
+    let buf = (0..cap)
+        .map(|_| UnsafeCell::new(MaybeUninit::uninit()))
+        .collect();
+    let s = Arc::new(Shared {
+        buf,
+        head: AtomicUsize::new(0),
+        tail: AtomicUsize::new(0),
+    });
     (Producer(s.clone()), Consumer(s))
 }
 
@@ -32,7 +41,9 @@ impl<T> Producer<T> {
             return Err(v); // full
         }
         // SAFETY: slot t is empty and owned by the producer until tail is published.
-        unsafe { (*s.buf[t % s.buf.len()].get()).write(v); }
+        unsafe {
+            (*s.buf[t % s.buf.len()].get()).write(v);
+        }
         s.tail.store(t.wrapping_add(1), Release); // publish the write
         Ok(())
     }
@@ -56,9 +67,14 @@ impl<T> Consumer<T> {
 impl<T> Drop for Shared<T> {
     fn drop(&mut self) {
         let (h, t) = (*self.head.get_mut(), *self.tail.get_mut());
-        for i in h..t {
-            // SAFETY: slots in [head, tail) hold initialised values nobody else can reach now.
-            unsafe { (*self.buf[i % self.buf.len()].get()).assume_init_drop(); }
+        let occupied = t.wrapping_sub(h);
+        for i in 0..occupied {
+            let slot = h.wrapping_add(i) % self.buf.len();
+            // SAFETY: the producer/consumer are both gone, and each of these slots
+            // contains a value that has not yet been moved out by the consumer.
+            unsafe {
+                (*self.buf[slot].get()).assume_init_drop();
+            }
         }
     }
 }
@@ -69,13 +85,29 @@ mod tests {
     #[test]
     fn transfers_in_order() {
         let (mut p, mut c) = channel::<u64>(64);
-        let prod = std::thread::spawn(move || { for i in 0..200_000u64 { while p.push(i).is_err() { std::hint::spin_loop(); } } });
-        let cons = std::thread::spawn(move || { let mut next = 0u64; while next < 200_000 { if let Some(v) = c.pop() { assert_eq!(v, next); next += 1; } } });
-        prod.join().unwrap(); cons.join().unwrap();
+        let prod = std::thread::spawn(move || {
+            for i in 0..200_000u64 {
+                while p.push(i).is_err() {
+                    std::hint::spin_loop();
+                }
+            }
+        });
+        let cons = std::thread::spawn(move || {
+            let mut next = 0u64;
+            while next < 200_000 {
+                if let Some(v) = c.pop() {
+                    assert_eq!(v, next);
+                    next += 1;
+                }
+            }
+        });
+        prod.join().unwrap();
+        cons.join().unwrap();
     }
     #[test]
     fn drops_leftovers() {
         let (mut p, _c) = channel::<String>(4);
-        p.push("a".into()).unwrap(); p.push("b".into()).unwrap();
+        p.push("a".into()).unwrap();
+        p.push("b".into()).unwrap();
     }
 }

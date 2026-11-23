@@ -11,6 +11,7 @@ Everything here was compiled and run while writing the guide (Rust 1.75, g++ 13)
 | crate-samples | 5, 6, 8, 10, 11, 12 | needs crates.io: `cargo run --release --example NAME` for backpressure, parallel, shutdown, proxy; `cargo run` runs src/main.rs |
 
 Notes:
+- The table follows the workbook stages in the companion PDF. The repository is a set of executable samples rather than a complete implementation of every stage.
 - std-samples uses only the standard library. The pager is Unix-only and the AVX2 code is x86-64 only.
 - crate-samples/Cargo.lock pins versions that build on Rust 1.75. On a newer toolchain, delete it and let Cargo resolve fresh versions.
 - The sandbox used for verification had one CPU core, so the parallel and false-sharing examples were checked for correctness only. Measure speedups on your own multi-core machine.
