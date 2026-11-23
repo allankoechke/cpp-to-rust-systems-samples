@@ -1,0 +1,54 @@
+# Secrets and key material: never commit
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+*.jks
+.env
+.env.*
+certs/
+secrets/
+pki/private/
+*.sqlite
+*.sqlite3
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Rust
+target/
+*.rs.bk
+
+# Docker / local data
+docker-compose.override.yml
+data/
+*.log
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# OS image builds
+os/build/
+os/tmp/
+os/downloads/
+*.img
+*.wic
+
+decisions/
